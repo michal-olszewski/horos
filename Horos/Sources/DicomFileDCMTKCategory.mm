@@ -1072,7 +1072,29 @@ extern NSRecursiveLock *PapyrusLock;
             [dicomElements setObject:serie forKey:@"seriesDescription"];
             
             [dicomElements setObject: [self.serieID stringByAppendingString: studyID] forKey: @"seriesDICOMUID"];
-        }		
+        }
+        
+        // merge SRs
+        if( [Modality isEqualToString:@"SR"] )
+        {
+            self.serieID = @"SR";
+            [serie release];
+            serie = [[NSString alloc] initWithString: @"Structured Reports"];
+            [dicomElements setObject:serie forKey:@"seriesDescription"];
+            
+            [dicomElements setObject: [self.serieID stringByAppendingString: studyID] forKey: @"seriesDICOMUID"];
+        }
+        
+        // merge Perfusion
+        if( [Modality isEqualToString:@"MR"] && [serie rangeOfString: @"ep2d_perf" options: NSCaseInsensitiveSearch].location != NSNotFound)
+        {
+            self.serieID = @"PERF";
+            [serie release];
+            serie = [[NSString alloc] initWithString: @"Perfusion"];
+            [dicomElements setObject:serie forKey:@"seriesDescription"];
+            
+            [dicomElements setObject: [self.serieID stringByAppendingString: studyID] forKey: @"seriesDICOMUID"];
+        }
         
         [dicomElements setObject:[self patientUID] forKey:@"patientUID"];
         
