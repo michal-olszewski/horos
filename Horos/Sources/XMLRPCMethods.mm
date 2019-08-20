@@ -112,6 +112,8 @@
         return @"DisplayStudy:error:";
     if ([selName isEqualToString:@"displayseries"])
         return @"DisplaySeries:error:";
+    if ([selName isEqualToString:@"displayimage"])
+        return @"DisplayImage:error:";
 	if ([selName isEqualToString:@"dbwindowfind"] || [selName isEqualToString:@"findobject"])
         return @"FindObject:error:";
 	if ([selName isEqualToString:@"switchtodefaultdbifneeded"])
@@ -472,23 +474,23 @@
     
     NSArray* iobjects = [[self.database independentDatabase] objectsForEntity:@"Series" predicate:predicate error:error];
     
-// NOT SUPPORTED AT SERIES LEVEL
-//    if (!iobjects.count)
-//    {
-//        if ([NSUserDefaults.standardUserDefaults boolForKey:@"XMLRPCWithPOD"] && [NSUserDefaults.standardUserDefaults boolForKey:@"searchForComparativeStudiesOnDICOMNodes"]) {
-//            NSMutableDictionary* keys = [NSMutableDictionary dictionary];
-//            
-//            if (patientID.length)
-//                [keys setObject:patientID forKey:@"study.patientID"];
-//            if (seriesInstanceUID.length)
-//                [keys setObject:seriesInstanceUID forKey:@"seriesInstanceUID"];
-//            
-//            if (keys.count) {
-//                [keys setObject:@"SERIES" forKey:@"QueryRetrieveLevel"];
-//                iobjects = [self _PACSOnDemandRetrieve:keys];
-//            }
-//        }
-//    }
+    // NOT SUPPORTED AT SERIES LEVEL
+    //    if (!iobjects.count)
+    //    {
+    //        if ([NSUserDefaults.standardUserDefaults boolForKey:@"XMLRPCWithPOD"] && [NSUserDefaults.standardUserDefaults boolForKey:@"searchForComparativeStudiesOnDICOMNodes"]) {
+    //            NSMutableDictionary* keys = [NSMutableDictionary dictionary];
+    //
+    //            if (patientID.length)
+    //                [keys setObject:patientID forKey:@"study.patientID"];
+    //            if (seriesInstanceUID.length)
+    //                [keys setObject:seriesInstanceUID forKey:@"seriesInstanceUID"];
+    //
+    //            if (keys.count) {
+    //                [keys setObject:@"SERIES" forKey:@"QueryRetrieveLevel"];
+    //                iobjects = [self _PACSOnDemandRetrieve:keys];
+    //            }
+    //        }
+    //    }
     
     if (error && *error)
         ReturnWithErrorValue((*error).code);
@@ -496,6 +498,54 @@
         ReturnWithErrorValue(-1);
     
     [self performSelectorOnMainThread:@selector(_onMainThreadOpenObjectsWithIDs:) withObject:[iobjects valueForKey:@"objectID"] waitUntilDone:NO];
+    
+    NSMutableArray* elements = [NSMutableArray array];
+    for (NSManagedObject* iobj in iobjects)
+        [elements addObject:[[self class] dictionaryForObject:iobj]];
+    ReturnWithErrorValueAndObjectForKey(0, elements, @"elements");
+}
+
+/**
+ Method: DisplayImage
+ 
+ Parameters:
+ StudyInstanceUID
+ seriesNumber
+ imageNumber
+ 
+ Example: {StudyInstanceUID: "1.3.12.2.1107.5.2.30.25161.2019061118102213800969279.0.0.0", seriesNumber: 15, imageNumber: 90}
+ Response: {error: "0", elements: array of elements corresponding to the request}
+ */
+- (NSDictionary*)DisplayImage:(NSDictionary*)paramDict error:(NSError**)error {
+    NSMutableArray* subpredicates = [NSMutableArray array];
+    
+    NSInteger imageNumber = [[paramDict valueForKey:@"imageNumber"] integerValue]-1;
+    NSString* seriesInstanceUID = [paramDict valueForKey:@"SeriesInstanceUID"];
+    if (seriesInstanceUID.length) [subpredicates addObject:[NSPredicate predicateWithFormat:@"seriesDICOMUID == %@", seriesInstanceUID]];
+    //NSString* seriesNumber = [paramDict valueForKey:@"seriesNumber"];
+    //if (seriesNumber.length) [subpredicates addObject:[NSPredicate predicateWithFormat:@"seriesNumber == %@", seriesNumber]];
+    
+    if (!subpredicates.count)
+        ReturnWithCode(400); // Bad Request
+    
+    NSError* lerror = nil;
+    if (!error)
+        error = &lerror;
+    
+    NSPredicate* predicate = [NSCompoundPredicate andPredicateWithSubpredicates:subpredicates];
+    
+    NSArray* iobjects = [[self.database independentDatabase] objectsForEntity:@"Series" predicate:predicate error:error];
+    
+    if (error && *error)
+        ReturnWithErrorValue((*error).code);
+    if (iobjects.count == 0)
+        ReturnWithErrorValue(-1);
+    
+    [self performSelectorOnMainThread:@selector(_onMainThreadOpenObjectsWithIDs:) withObject:[iobjects valueForKey:@"objectID"] waitUntilDone:YES];
+    
+    for (ViewerController* v in [ViewerController getDisplayed2DViewers]){
+        [v setImageIndex:imageNumber];
+    }
     
     NSMutableArray* elements = [NSMutableArray array];
     for (NSManagedObject* iobj in iobjects)
